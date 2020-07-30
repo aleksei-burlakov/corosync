@@ -306,7 +306,7 @@ static int totemip_getif_scopeid(const unsigned char* addr16, unsigned int *scop
 	return rc;
 }
 
-
+static unsigned char default_bindnet_addr[sizeof(struct in6_addr)] = {0};
 int totemip_totemip_to_sockaddr_convert_2(struct totem_ip_address *ip_addr,
 					uint16_t port, struct sockaddr_storage *saddr, int *addrlen,
 					int fill_scopeid)
@@ -338,10 +338,12 @@ int totemip_totemip_to_sockaddr_convert_2(struct totem_ip_address *ip_addr,
 		sin->sin6_family = ip_addr->family;
 		sin->sin6_port = ntohs(port);
 		if (fill_scopeid) {
-			if (totemip_getif_scopeid(ip_addr->addr, &scopeid) == 0) {
-				sin->sin6_scope_id = scopeid;
-				log_printf(LOGSYS_LEVEL_ERROR, "New scopeid = %u", scopeid);
+			if (totemip_getif_scopeid(ip_addr->addr, &scopeid) != 0) {
+				/* if not, then take the default */
+				totemip_getif_scopeid(default_bindnet_addr, &scopeid);
 			}
+			sin->sin6_scope_id = scopeid;
+			log_printf(LOGSYS_LEVEL_ERROR, "New scopeid = %u", scopeid);
 		}
 		memcpy(&sin->sin6_addr, ip_addr->addr, sizeof(struct in6_addr));
 
@@ -529,6 +531,10 @@ int totemip_iface_check(struct totem_ip_address *bindnet,
 		return (-1);
 	}
 
+	if (bindnet->family == AF_INET6) {
+		memcpy(default_bindnet_addr, bindnet->addr, sizeof(struct in6_addr));
+	}
+		
 	for (list = addrs.next; list != &addrs; list = list->next) {
 		if_addr = list_entry(list, struct totem_ip_if_address, list);
 
