@@ -1752,19 +1752,36 @@ static void memb_recovery_state_token_loss (struct totemsrp_instance *instance)
 	instance->stats.recovery_token_lost++;
 }
 
+#include <systemd/sd-journal.h>
+#include <unistd.h>
+
 static void timer_function_orf_token_timeout (void *data)
 {
 	struct totemsrp_instance *instance = data;
+	char msg[260] = {0};
 
 	switch (instance->memb_state) {
 		case MEMB_STATE_OPERATIONAL:
 			log_printf (instance->totemsrp_log_level_debug,
 				"The token was lost in the OPERATIONAL state.");
-			log_printf (instance->totemsrp_log_level_notice,
+			sprintf(msg, "MESSAGE=A processor failed, forming new configuration: "
+					" token timed out (%ums), waiting %ums for consensus.",
+					instance->totem_config->token_timeout,
+					instance->totem_config->consensus_timeout);
+			sd_journal_send(msg,
+                        "MESSAGE_ID=52fb62f99e2c49d89cfbf9d6de5e3555",
+                        "PRIORITY=5",
+                        "HOME=%s", getenv("HOME"),
+                        "TERM=%s", getenv("TERM"),
+                        "PAGE_SIZE=%li", sysconf(_SC_PAGESIZE),
+                        "N_CPUS=%li", sysconf(_SC_NPROCESSORS_ONLN),
+                        NULL);
+
+			/*log_printf (instance->totemsrp_log_level_notice,
 				"A processor failed, forming new configuration:"
 				" token timed out (%ums), waiting %ums for consensus.",
 				instance->totem_config->token_timeout,
-				instance->totem_config->consensus_timeout);
+				instance->totem_config->consensus_timeout);*/
 			totemrrp_iface_check (instance->totemrrp_context);
 			memb_state_gather_enter (instance, TOTEMSRP_GSFROM_THE_TOKEN_WAS_LOST_IN_THE_OPERATIONAL_STATE);
 			instance->stats.operational_token_lost++;
